@@ -1,0 +1,9 @@
+*~
+/pkg/
+/tmp/
+/.bundle/
+/Gemfile.lock
+/bin/
+/vendor/
+state.yml
+Gemfile.local
