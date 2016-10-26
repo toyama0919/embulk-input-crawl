@@ -3,6 +3,40 @@ require 'anemone'
 module Embulk
   module Input
 
+    # Anemone default setting
+    # DEFAULT_OPTS = {
+    #   # run 4 Tentacle threads to fetch pages
+    #   :threads => 4,
+    #   # disable verbose output
+    #   :verbose => false,
+    #   # don't throw away the page response body after scanning it for links
+    #   :discard_page_bodies => false,
+    #   # identify self as Anemone/VERSION
+    #   :user_agent => "Anemone/#{Anemone::VERSION}",
+    #   # no delay between requests
+    #   :delay => 0,
+    #   # don't obey the robots exclusion protocol
+    #   :obey_robots_txt => false,
+    #   # by default, don't limit the depth of the crawl
+    #   :depth_limit => false,
+    #   # number of times HTTP redirects will be followed
+    #   :redirect_limit => 5,
+    #   # storage engine defaults to Hash in +process_options+ if none specified
+    #   :storage => nil,
+    #   # Hash of cookie name => value to send with HTTP requests
+    #   :cookies => nil,
+    #   # accept cookies from the server and send them back?
+    #   :accept_cookies => false,
+    #   # skip any link with a query string? e.g. http://foo.com/?u=user
+    #   :skip_query_strings => false,
+    #   # proxy server hostname 
+    #   :proxy_host => nil,
+    #   # proxy server port number
+    #   :proxy_port => false,
+    #   # HTTP read timeout in seconds
+    #   :read_timeout => nil
+    # }
+
     class Crawl < InputPlugin
       Plugin.register_input("crawl", self)
 
@@ -44,39 +78,6 @@ module Embulk
         next_config_diff = { done_payloads: task_reports }
         return next_config_diff
       end
-
-      # DEFAULT_OPTS = {
-      #   # run 4 Tentacle threads to fetch pages
-      #   :threads => 4,
-      #   # disable verbose output
-      #   :verbose => false,
-      #   # don't throw away the page response body after scanning it for links
-      #   :discard_page_bodies => false,
-      #   # identify self as Anemone/VERSION
-      #   :user_agent => "Anemone/#{Anemone::VERSION}",
-      #   # no delay between requests
-      #   :delay => 0,
-      #   # don't obey the robots exclusion protocol
-      #   :obey_robots_txt => false,
-      #   # by default, don't limit the depth of the crawl
-      #   :depth_limit => false,
-      #   # number of times HTTP redirects will be followed
-      #   :redirect_limit => 5,
-      #   # storage engine defaults to Hash in +process_options+ if none specified
-      #   :storage => nil,
-      #   # Hash of cookie name => value to send with HTTP requests
-      #   :cookies => nil,
-      #   # accept cookies from the server and send them back?
-      #   :accept_cookies => false,
-      #   # skip any link with a query string? e.g. http://foo.com/?u=user
-      #   :skip_query_strings => false,
-      #   # proxy server hostname 
-      #   :proxy_host => nil,
-      #   # proxy server port number
-      #   :proxy_port => false,
-      #   # HTTP read timeout in seconds
-      #   :read_timeout => nil
-      # }
 
       def init
         @payload = task["payloads"][@index]
