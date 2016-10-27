@@ -109,7 +109,10 @@ module Embulk
 
       def run
         if should_process_payload?(@payload)
-          Anemone.crawl(@payload[@url_key_of_payload], @option) do |anemone|
+          base_url = @payload[@url_key_of_payload]
+          Embulk.logger.info("crawling.. => #{base_url}")
+
+          Anemone.crawl(base_url, @option) do |anemone|
             anemone.skip_links_like(@reject_url_regexp) if @reject_url_regexp
             anemone.focus_crawl do |page|
               page.links.keep_if { |link|
@@ -149,7 +152,7 @@ module Embulk
       end
 
       def make_record(page)
-        Embulk.logger.info("url => #{page.url.to_s}")
+        Embulk.logger.debug("url => #{page.url.to_s}")
         doc = page.doc
 
         record = {}
