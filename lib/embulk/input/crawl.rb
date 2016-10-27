@@ -52,6 +52,8 @@ module Embulk
           "skip_query_strings" => config.param("skip_query_strings", :bool, default: false),
           "add_payload_to_record" => config.param("add_payload_to_record", :bool, default: false),
           "accept_cookies" => config.param("accept_cookies", :bool, default: false),
+          "remove_style_on_body" => config.param("remove_style_on_body", :bool, default: false),
+          "remove_script_on_body" => config.param("remove_style_on_body", :bool, default: false),
           "delay" => config.param("delay", :integer, default: nil),
           "depth_limit" => config.param("depth_limit", :integer, default: nil),
           "read_timeout" => config.param("read_timeout", :integer, default: nil),
@@ -85,6 +87,9 @@ module Embulk
         @add_payload_to_record = task["add_payload_to_record"]
         @reject_url_regexp = Regexp.new(task["reject_url_regexp"]) if task['reject_url_regexp']
         @crawl_url_regexp = Regexp.new(task["crawl_url_regexp"]) if task['crawl_url_regexp']
+        @remove_style_on_body = Regexp.new(task["remove_style_on_body"]) if task['remove_style_on_body']
+        @remove_script_on_body = Regexp.new(task["remove_script_on_body"]) if task['remove_script_on_body']
+
         @option = {
           threads: 1,
           obey_robots_txt: task["obey_robots_txt"],
@@ -177,13 +182,17 @@ module Embulk
       def get_body(doc)
         return nil if doc.nil?
         # scriptタグの中身は空にする
-        doc.search('script').each do |script|
-          script.content = ''
+        if @remove_style_on_body
+          doc.search('script').each do |script|
+            script.content = ''
+          end
         end
 
         # styleタグの中身は空にする
-        doc.search('style').each do |style|
-          style.content = ''
+        if @remove_style_on_body
+          doc.search('style').each do |style|
+            style.content = ''
+          end
         end
         doc.search('body').text.gsub(/(\r\n|\r|\n|\f)+/, " ")
       end
