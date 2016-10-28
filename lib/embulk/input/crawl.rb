@@ -58,6 +58,7 @@ module Embulk
           "depth_limit" => config.param("depth_limit", :integer, default: nil),
           "read_timeout" => config.param("read_timeout", :integer, default: nil),
           "redirect_limit" => config.param("redirect_limit", :integer, default: nil),
+          "page_limit" => config.param("page_limit", :integer, default: nil),
           "cookies" => config.param("cookies", :hash, default: nil),
         }
 
@@ -89,6 +90,7 @@ module Embulk
         @crawl_url_regexp = Regexp.new(task["crawl_url_regexp"]) if task['crawl_url_regexp']
         @remove_style_on_body = task["remove_style_on_body"] if task['remove_style_on_body']
         @remove_script_on_body = task["remove_script_on_body"] if task['remove_script_on_body']
+        @page_limit = task["page_limit"] if task['page_limit']
 
         @option = {
           threads: 1,
@@ -112,11 +114,19 @@ module Embulk
           base_url = @payload[@url_key_of_payload]
           Embulk.logger.info("crawling.. => #{base_url}")
 
+          crawl_counter = 0
           Anemone.crawl(base_url, @option) do |anemone|
             anemone.skip_links_like(@reject_url_regexp) if @reject_url_regexp
+
             anemone.focus_crawl do |page|
-              page.links.keep_if { |link|
-                @crawl_url_regexp ? @crawl_url_regexp.match(link.to_s) : true
+              page.links(exclude_nofollow: true).keep_if { |link|
+                if @page_limit && (crawl_counter >= @page_limit)
+                  false
+                else
+                  is_crawl = crawl?(link)
+                  crawl_counter += 1 if is_crawl
+                  is_crawl
+                end
               }
             end
 
@@ -198,6 +208,14 @@ module Embulk
           end
         end
         doc.search('body').text.gsub(/(\r\n|\r|\n|\f)+/, " ")
+      end
+
+      def crawl?(link)
+        if @crawl_url_regexp
+          return @crawl_url_regexp.match(link.to_s) ? true : false
+        else
+          return true
+        end
       end
     end
   end
