@@ -87,8 +87,8 @@ module Embulk
         @add_payload_to_record = task["add_payload_to_record"]
         @reject_url_regexp = Regexp.new(task["reject_url_regexp"]) if task['reject_url_regexp']
         @crawl_url_regexp = Regexp.new(task["crawl_url_regexp"]) if task['crawl_url_regexp']
-        @remove_style_on_body = Regexp.new(task["remove_style_on_body"]) if task['remove_style_on_body']
-        @remove_script_on_body = Regexp.new(task["remove_script_on_body"]) if task['remove_script_on_body']
+        @remove_style_on_body = task["remove_style_on_body"] if task['remove_style_on_body']
+        @remove_script_on_body = task["remove_script_on_body"] if task['remove_script_on_body']
 
         @option = {
           threads: 1,
