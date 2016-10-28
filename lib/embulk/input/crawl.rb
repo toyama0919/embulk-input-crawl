@@ -168,7 +168,7 @@ module Embulk
         record = {}
         record['url'] = page.url.to_s
 
-        record['title'] = get_body(doc)
+        record['title'] = get_title(doc)
 
         record['body'] = get_body(doc)
 
