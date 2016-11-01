@@ -131,12 +131,17 @@ module Embulk
             end
 
             anemone.on_every_page do |page|
-              record = make_record(page)
+              redirect_url = redirect_url(page)
+              if redirect_url(page)
+                page.links << redirect_url
+              else
+                record = make_record(page)
 
-              values = schema.map { |column|
-                record[column.name]
-              }
-              page_builder.add(values)
+                values = schema.map { |column|
+                  record[column.name]
+                }
+                page_builder.add(values)
+              end
             end
           end
 
@@ -216,6 +221,29 @@ module Embulk
         else
           return true
         end
+      end
+
+      def redirect_url(page)
+        if page.redirect?
+          return page.redirect_to
+        end
+
+        doc = page.doc
+        if doc
+          doc.search('meta').each do |meta|
+            if meta.attribute('http-equiv')&.value =~ /(r|R)efresh/
+              redirect_url = meta.attribute('content').value.sub(/.*(url|URL)=/, '').strip.split(';')[0]
+              unless redirect_url =~ /^http(|s)/
+                redirect_url = page.url.to_s.sub(/\/$/, '') + '/' + redirect_url.sub(/^\//, '')
+              end
+              unless redirect_url.size == redirect_url.bytesize
+                redirect_url = URI.encode(redirect_url)
+              end
+              return URI.parse(redirect_url)
+            end
+          end
+        end
+        return nil
       end
     end
   end
