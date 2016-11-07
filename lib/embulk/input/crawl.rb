@@ -194,14 +194,12 @@ module Embulk
 
       def get_body(doc)
         return nil if doc.nil?
-        # scriptタグの中身は空にする
         if @remove_style_on_body
           doc.search('script').each do |script|
             script.content = ''
           end
         end
 
-        # styleタグの中身は空にする
         if @remove_style_on_body
           doc.search('style').each do |style|
             style.content = ''
