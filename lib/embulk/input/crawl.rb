@@ -189,12 +189,7 @@ module Embulk
 
       def get_title(doc)
         return nil if doc.nil?
-        title = nil
-        doc.search('title').each do |title_row|
-          title = title_row.text
-          break
-        end
-        title
+        doc.title
       end
 
       def get_body(doc)
@@ -212,7 +207,7 @@ module Embulk
             style.content = ''
           end
         end
-        doc.search('body').text.gsub(/(\r\n|\r|\n|\f)+/, " ")
+        doc.search('body').text.gsub(/([\s])+/, " ")
       end
 
       def crawl?(link)
