@@ -198,6 +198,10 @@ module Embulk
           doc.search('script').each do |script|
             script.content = ''
           end
+
+          doc.search('noscript').each do |script|
+            script.content = ''
+          end
         end
 
         if @remove_style_on_body
