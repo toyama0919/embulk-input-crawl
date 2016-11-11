@@ -1,6 +1,8 @@
 source 'https://rubygems.org/'
 gemspec
 
+gem 'anemone', github: 'ipros-team/anemone'
+
 local_gemfile = File.join(File.dirname(__FILE__), "Gemfile.local")
 if File.exist?(local_gemfile)
   puts "Loading Gemfile.local ..." if $DEBUG # `ruby -d` or `bundle -v`
