@@ -7,7 +7,7 @@ Gem::Specification.new do |spec|
   spec.description   = "Loads records from Crawl results."
   spec.email         = ["toyama0919@gmail.com"]
   spec.licenses      = ["MIT"]
-  # TODO set this: spec.homepage      = "https://github.com/toyama0919/embulk-input-crawl"
+  spec.homepage      = "https://github.com/toyama0919/embulk-input-crawl"
 
   spec.files         = `git ls-files`.split("\n") + Dir["classpath/*.jar"]
   spec.test_files    = spec.files.grep(%r{^(test|spec)/})
