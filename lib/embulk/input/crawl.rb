@@ -119,6 +119,7 @@ module Embulk
           Embulk.logger.info("crawling.. => #{@base_url}")
 
           crawl_counter = 0
+          crawled_urls = Set.new
           Anemone.crawl(@base_url, @option) do |anemone|
             anemone.skip_links_like(@reject_url_regexp) if @reject_url_regexp
 
@@ -136,15 +137,21 @@ module Embulk
 
             anemone.on_every_page do |page|
               redirect_url = redirect_url(page)
-              if redirect_url(page)
-                page.links << redirect_url
+              if redirect_url
+                if crawled_urls.add?(redirect_url)
+                  page.links << redirect_url
+                end
               else
-                record = make_record(page)
+                url = page.url.to_s
+                if crawled_urls.add?(url)
+                  record = make_record(page)
 
-                values = schema.map { |column|
-                  record[column.name]
-                }
-                page_builder.add(values)
+                  values = schema.map { |column|
+                    record[column.name]
+                  }
+                  page_builder.add(values)
+                  crawled_urls << url
+                end
               end
             end
           end
