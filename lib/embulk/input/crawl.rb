@@ -60,6 +60,7 @@ module Embulk
           "redirect_limit" => config.param("redirect_limit", :integer, default: nil),
           "page_limit" => config.param("page_limit", :integer, default: nil),
           "cookies" => config.param("cookies", :hash, default: nil),
+          "not_up_depth_more_base_url" => config.param("not_up_depth_more_base_url", :bool, default: false),
         }
 
         columns = [
@@ -84,13 +85,17 @@ module Embulk
 
       def init
         @payload = task["payloads"][@index]
-        @url_key_of_payload = task["url_key_of_payload"]
+        @base_url = @payload[task["url_key_of_payload"]]
         @add_payload_to_record = task["add_payload_to_record"]
         @reject_url_regexp = Regexp.new(task["reject_url_regexp"]) if task['reject_url_regexp']
         @crawl_url_regexp = Regexp.new(task["crawl_url_regexp"]) if task['crawl_url_regexp']
         @remove_style_on_body = task["remove_style_on_body"] if task['remove_style_on_body']
         @remove_script_on_body = task["remove_script_on_body"] if task['remove_script_on_body']
         @page_limit = task["page_limit"] if task['page_limit']
+
+        # not up depth more base url settings
+        @not_up_depth_more_base_url = task["not_up_depth_more_base_url"]
+        @base_url_path = URI.parse(@base_url).path
 
         @option = {
           threads: 1,
@@ -111,11 +116,10 @@ module Embulk
 
       def run
         if should_process_payload?(@payload)
-          base_url = @payload[@url_key_of_payload]
-          Embulk.logger.info("crawling.. => #{base_url}")
+          Embulk.logger.info("crawling.. => #{@base_url}")
 
           crawl_counter = 0
-          Anemone.crawl(base_url, @option) do |anemone|
+          Anemone.crawl(@base_url, @option) do |anemone|
             anemone.skip_links_like(@reject_url_regexp) if @reject_url_regexp
 
             anemone.focus_crawl do |page|
@@ -213,6 +217,11 @@ module Embulk
       end
 
       def crawl?(link)
+        if @not_up_depth_more_base_url
+          unless link.path.include?(@base_url_path)
+            return false
+          end
+        end
         if @crawl_url_regexp
           return @crawl_url_regexp.match(link.to_s) ? true : false
         else
