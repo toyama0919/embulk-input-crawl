@@ -120,50 +120,7 @@ module Embulk
       def run
         Embulk.logger.debug("Process payload this thread => #{@payloads}")
         @payloads.each do |payload|
-          base_url = payload[@url_key_of_payload]
-          base_url_path = Addressable::URI.parse(base_url).path
-
-          if should_process_payload?(payload)
-            Embulk.logger.info("crawling.. => #{base_url}")
-
-            crawl_counter = 0
-            crawled_urls = Set.new
-            Anemone.crawl(base_url, @option) do |anemone|
-              anemone.skip_links_like(@reject_url_regexp) if @reject_url_regexp
-
-              anemone.focus_crawl do |page|
-                page.links(exclude_nofollow: true).keep_if { |link|
-                  if @page_limit && (crawl_counter >= @page_limit)
-                    false
-                  else
-                    is_crawl = crawl?(link, base_url_path)
-                    crawl_counter += 1 if is_crawl
-                    is_crawl
-                  end
-                }
-              end
-
-              anemone.on_every_page do |page|
-                redirect_url = redirect_url(page)
-                if redirect_url
-                  if crawled_urls.add?(redirect_url)
-                    page.links << redirect_url
-                  end
-                else
-                  url = page.url.to_s
-                  if crawled_urls.add?(url)
-                    record = make_record(page, payload)
-
-                    values = schema.map { |column|
-                      record[column.name]
-                    }
-                    page_builder.add(values)
-                    crawled_urls << url
-                  end
-                end
-              end
-            end
-          end
+          proc_payload(payload)
         end
 
         page_builder.finish
@@ -173,6 +130,53 @@ module Embulk
       end
 
       private
+
+      def proc_payload(payload)
+        base_url = payload[@url_key_of_payload]
+        base_url_path = Addressable::URI.parse(base_url).path
+
+        if should_process_payload?(payload)
+          Embulk.logger.info("crawling.. => #{base_url}")
+
+          crawl_counter = 0
+          crawled_urls = Set.new
+          Anemone.crawl(base_url, @option) do |anemone|
+            anemone.skip_links_like(@reject_url_regexp) if @reject_url_regexp
+
+            anemone.focus_crawl do |page|
+              page.links(exclude_nofollow: true).keep_if { |link|
+                if @page_limit && (crawl_counter >= @page_limit)
+                  false
+                else
+                  is_crawl = crawl?(link, base_url_path)
+                  crawl_counter += 1 if is_crawl
+                  is_crawl
+                end
+              }
+            end
+
+            anemone.on_every_page do |page|
+              redirect_url = redirect_url(page)
+              if redirect_url
+                if crawled_urls.add?(redirect_url)
+                  page.links << redirect_url
+                end
+              else
+                url = page.url.to_s
+                if crawled_urls.add?(url)
+                  record = make_record(page, payload)
+
+                  values = schema.map { |column|
+                    record[column.name]
+                  }
+                  page_builder.add(values)
+                  crawled_urls << url
+                end
+              end
+            end
+          end
+        end
+      end
 
       def should_process_payload?(payload)
         true
