@@ -1,4 +1,5 @@
 require 'anemone'
+require 'addressable/uri'
 
 module Embulk
   module Input
@@ -42,7 +43,6 @@ module Embulk
 
       def self.transaction(config, &control)
         task = {
-          "payloads" => config.param("payloads", :array),
           "done_payloads" => config['done_payloads'],
           "url_key_of_payload" => config.param("url_key_of_payload", :string, default: 'url'),
           "crawl_url_regexp" => config.param("crawl_url_regexp", :string, default: nil),
@@ -62,6 +62,10 @@ module Embulk
           "cookies" => config.param("cookies", :hash, default: nil),
           "not_up_depth_more_base_url" => config.param("not_up_depth_more_base_url", :bool, default: false),
         }
+        payloads = config.param("payloads", :array)
+        task['payloads_groups'] = payloads
+                                  .each_slice(config.param("payloads_per_thread", :integer, default: 1))
+                                  .to_a
 
         columns = [
           Column.new(0, "url", :string),
@@ -73,7 +77,7 @@ module Embulk
         ]
         columns << Column.new(6, "payload", :json) if task['add_payload_to_record']
 
-        resume(task, columns, task['payloads'].size, &control)
+        resume(task, columns, task['payloads_groups'].size, &control)
       end
 
       def self.resume(task, columns, count, &control)
@@ -84,18 +88,17 @@ module Embulk
       end
 
       def init
-        @payload = task["payloads"][@index]
-        @base_url = @payload[task["url_key_of_payload"]]
+        @payloads = task["payloads_groups"][@index]
         @add_payload_to_record = task["add_payload_to_record"]
         @reject_url_regexp = Regexp.new(task["reject_url_regexp"]) if task['reject_url_regexp']
         @crawl_url_regexp = Regexp.new(task["crawl_url_regexp"]) if task['crawl_url_regexp']
         @remove_style_on_body = task["remove_style_on_body"] if task['remove_style_on_body']
         @remove_script_on_body = task["remove_script_on_body"] if task['remove_script_on_body']
         @page_limit = task["page_limit"] if task['page_limit']
+        @url_key_of_payload = task["url_key_of_payload"]
 
         # not up depth more base url settings
         @not_up_depth_more_base_url = task["not_up_depth_more_base_url"]
-        @base_url_path = URI.parse(@base_url).path
 
         @option = {
           threads: 1,
@@ -115,69 +118,67 @@ module Embulk
       end
 
       def run
-        if should_process_payload?(@payload)
-          Embulk.logger.info("crawling.. => #{@base_url}")
+        Embulk.logger.debug("Process payload this thread => #{@payloads}")
+        @payloads.each do |payload|
+          base_url = payload[@url_key_of_payload]
+          base_url_path = Addressable::URI.parse(base_url).path
 
-          crawl_counter = 0
-          crawled_urls = Set.new
-          Anemone.crawl(@base_url, @option) do |anemone|
-            anemone.skip_links_like(@reject_url_regexp) if @reject_url_regexp
+          if should_process_payload?(payload)
+            Embulk.logger.info("crawling.. => #{base_url}")
 
-            anemone.focus_crawl do |page|
-              page.links(exclude_nofollow: true).keep_if { |link|
-                if @page_limit && (crawl_counter >= @page_limit)
-                  false
+            crawl_counter = 0
+            crawled_urls = Set.new
+            Anemone.crawl(base_url, @option) do |anemone|
+              anemone.skip_links_like(@reject_url_regexp) if @reject_url_regexp
+
+              anemone.focus_crawl do |page|
+                page.links(exclude_nofollow: true).keep_if { |link|
+                  if @page_limit && (crawl_counter >= @page_limit)
+                    false
+                  else
+                    is_crawl = crawl?(link, base_url_path)
+                    crawl_counter += 1 if is_crawl
+                    is_crawl
+                  end
+                }
+              end
+
+              anemone.on_every_page do |page|
+                redirect_url = redirect_url(page)
+                if redirect_url
+                  if crawled_urls.add?(redirect_url)
+                    page.links << redirect_url
+                  end
                 else
-                  is_crawl = crawl?(link)
-                  crawl_counter += 1 if is_crawl
-                  is_crawl
-                end
-              }
-            end
+                  url = page.url.to_s
+                  if crawled_urls.add?(url)
+                    record = make_record(page, payload)
 
-            anemone.on_every_page do |page|
-              redirect_url = redirect_url(page)
-              if redirect_url
-                if crawled_urls.add?(redirect_url)
-                  page.links << redirect_url
-                end
-              else
-                url = page.url.to_s
-                if crawled_urls.add?(url)
-                  record = make_record(page)
-
-                  values = schema.map { |column|
-                    record[column.name]
-                  }
-                  page_builder.add(values)
-                  crawled_urls << url
+                    values = schema.map { |column|
+                      record[column.name]
+                    }
+                    page_builder.add(values)
+                    crawled_urls << url
+                  end
                 end
               end
             end
           end
-
-          page_builder.finish
         end
 
-        task_report = { 'done_payload' => @payload }
+        page_builder.finish
+
+        task_report = { 'done_payload' => @payloads }
         return task_report
       end
 
       private
 
       def should_process_payload?(payload)
-        if @done_payloads
-          if @done_payloads.include?(payload)
-            false
-          else
-            true
-          end
-        else
-          true
-        end
+        true
       end
 
-      def make_record(page)
+      def make_record(page, payload)
         Embulk.logger.debug("url => #{page.url.to_s}")
         doc = page.doc
 
@@ -194,7 +195,7 @@ module Embulk
 
         record['response_time'] = page.response_time
 
-        record['payload'] = @payload if @add_payload_to_record
+        record['payload'] = payload if @add_payload_to_record
         record
       end
 
@@ -223,9 +224,9 @@ module Embulk
         doc.search('body').text.gsub(/([\s])+/, " ")
       end
 
-      def crawl?(link)
+      def crawl?(link, base_url_path)
         if @not_up_depth_more_base_url
-          unless link.path.include?(@base_url_path)
+          unless link.path.include?(base_url_path)
             return false
           end
         end
@@ -252,7 +253,7 @@ module Embulk
               unless redirect_url.size == redirect_url.bytesize
                 redirect_url = URI.encode(redirect_url)
               end
-              return URI.parse(redirect_url)
+              return Addressable::URI.parse(redirect_url)
             end
           end
         end
