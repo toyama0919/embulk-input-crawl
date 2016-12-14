@@ -59,6 +59,7 @@ module Embulk
           "read_timeout" => config.param("read_timeout", :integer, default: nil),
           "redirect_limit" => config.param("redirect_limit", :integer, default: nil),
           "page_limit" => config.param("page_limit", :integer, default: nil),
+          "body_size_limit" => config.param("body_size_limit", :integer, default: nil),
           "cookies" => config.param("cookies", :hash, default: nil),
           "not_up_depth_more_base_url" => config.param("not_up_depth_more_base_url", :bool, default: false),
         }
@@ -95,6 +96,7 @@ module Embulk
         @remove_style_on_body = task["remove_style_on_body"] if task['remove_style_on_body']
         @remove_script_on_body = task["remove_script_on_body"] if task['remove_script_on_body']
         @page_limit = task["page_limit"] if task['page_limit']
+        @body_size_limit = task["body_size_limit"] if task['body_size_limit']
         @url_key_of_payload = task["url_key_of_payload"]
 
         # not up depth more base url settings
@@ -191,7 +193,9 @@ module Embulk
 
         record['title'] = get_title(doc)
 
-        record['body'] = get_body(doc)
+        body = get_body(doc)
+        body = body.slice(0, @body_size_limit) if body && @body_size_limit
+        record['body'] = body
 
         record['time'] = Time.now
 
