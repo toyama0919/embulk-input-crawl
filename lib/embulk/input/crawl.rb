@@ -262,14 +262,17 @@ module Embulk
         if doc
           doc.search('meta').each do |meta|
             if meta.attribute('http-equiv')&.value =~ /(r|R)efresh/
-              redirect_url = meta.attribute('content').value.sub(/.*(url|URL)=/, '').strip.split(';')[0]
-              unless redirect_url =~ /^http(|s)/
-                redirect_url = page.url.to_s.sub(/\/$/, '') + '/' + redirect_url.sub(/^\//, '')
+              meta_content_value = meta.attribute('content').value
+              if meta_content_value
+                redirect_url = meta_content_value.sub(/.*(url|URL)=/, '').strip.split(';')[0]
+                unless redirect_url =~ /^http(|s)/
+                  redirect_url = page.url.to_s.sub(/\/$/, '') + '/' + redirect_url.sub(/^\//, '')
+                end
+                unless redirect_url.size == redirect_url.bytesize
+                  redirect_url = URI.encode(redirect_url)
+                end
+                return Addressable::URI.parse(redirect_url)
               end
-              unless redirect_url.size == redirect_url.bytesize
-                redirect_url = URI.encode(redirect_url)
-              end
-              return Addressable::URI.parse(redirect_url)
             end
           end
         end
