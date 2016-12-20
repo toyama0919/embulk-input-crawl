@@ -1,5 +1,6 @@
 require 'anemone'
 require 'addressable/uri'
+require 'pp'
 
 module Embulk
   module Input
@@ -142,6 +143,8 @@ module Embulk
 
           crawl_counter = 0
           crawled_urls = Set.new
+          success_urls = []
+          error_urls = []
           Anemone.crawl(base_url, @option) do |anemone|
             anemone.skip_links_like(@reject_url_regexp) if @reject_url_regexp
 
@@ -164,7 +167,7 @@ module Embulk
                   page.links << redirect_url
                 end
               else
-                url = page.url.to_s
+                url = page.url
                 if crawled_urls.add?(url)
                   record = make_record(page, payload)
 
@@ -172,11 +175,16 @@ module Embulk
                     record[column.name]
                   }
                   page_builder.add(values)
-                  crawled_urls << url
+                  if record['code'] < 400
+                    success_urls << url
+                  else
+                    error_urls << url
+                  end
                 end
               end
             end
           end
+          Embulk.logger.info("crawled => #{base_url}, crawled_urls count => #{crawled_urls.size}, success_urls count => #{success_urls.size}, error_urls => #{error_urls.size}")
         end
       end
 
