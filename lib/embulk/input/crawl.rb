@@ -44,7 +44,7 @@ module Embulk
 
       def self.transaction(config, &control)
         task = {
-          "done_payloads" => config['done_payloads'],
+          "done_url_groups" => config['done_url_groups'],
           "url_key_of_payload" => config.param("url_key_of_payload", :string, default: 'url'),
           "crawl_url_regexp" => config.param("crawl_url_regexp", :string, default: nil),
           "reject_url_regexp" => config.param("reject_url_regexp", :string, default: nil),
@@ -69,6 +69,12 @@ module Embulk
                                   .each_slice(config.param("payloads_per_thread", :integer, default: 1))
                                   .to_a
 
+        if config['done_url_groups']
+          task['done_urls'] = config['done_url_groups'].map{ |hash|
+            hash['done_urls']
+          }.flatten.compact
+        end
+
         columns = [
           Column.new(0, "url", :string),
           Column.new(1, "title", :string),
@@ -85,7 +91,7 @@ module Embulk
       def self.resume(task, columns, count, &control)
         task_reports = yield(task, columns, count)
 
-        next_config_diff = { done_payloads: task_reports }
+        next_config_diff = { done_url_groups: task_reports }
         return next_config_diff
       end
 
@@ -115,20 +121,18 @@ module Embulk
         @option[:read_timeout] = task['read_timeout'] if task['read_timeout']
         @option[:redirect_limit] = task['redirect_limit'] if task['redirect_limit']
         @option[:cookies] = task['cookies'] if task['cookies']
-        if task['done_payloads']
-          @done_payloads = task['done_payloads'].map{ |done_payload| done_payload['done_payload'] }
-        end
       end
 
       def run
         Embulk.logger.debug("Process payload this thread => #{@payloads}")
+        done_urls = []
         @payloads.each do |payload|
-          proc_payload(payload)
+          done_urls << proc_payload(payload)
         end
 
         page_builder.finish
 
-        task_report = { 'done_payload' => @payloads }
+        task_report = { 'done_urls' => done_urls }
         return task_report
       end
 
@@ -138,7 +142,7 @@ module Embulk
         base_url = payload[@url_key_of_payload]
         base_url_path = Addressable::URI.parse(base_url).path
 
-        if should_process_payload?(payload)
+        if should_process_payload?(base_url)
           Embulk.logger.info("crawling.. => #{base_url}")
 
           crawl_counter = 0
@@ -186,10 +190,15 @@ module Embulk
           end
           Embulk.logger.info("crawled => #{base_url}, crawled_urls count => #{crawled_urls.size}, success_urls count => #{success_urls.size}, error_urls => #{error_urls.size}")
         end
+        base_url
       end
 
-      def should_process_payload?(payload)
-        true
+      def should_process_payload?(base_url)
+        if task['done_urls']
+          !task['done_urls'].include?(base_url)
+        else
+          true
+        end
       end
 
       def make_record(page, payload)
